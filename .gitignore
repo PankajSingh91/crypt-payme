@@ -1,0 +1,56 @@
+# ====================
+# Global ignores
+# ====================
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS-specific
+.DS_Store
+Thumbs.db
+
+# Environment variables
+**/.env
+
+# ====================
+# Backend (Hardhat)
+# ====================
+backend/node_modules/
+backend/artifacts/
+backend/cache/
+backend/deployments/
+backend/.openzeppelin/
+
+# Hardhat temporary files
+backend/tmp/
+backend/typechain/
+
+# ====================
+# Frontend (React)
+# ====================
+frontend/node_modules/
+frontend/build/
+frontend/.env.local
+frontend/.env.development.local
+frontend/.env.test.local
+frontend/.env.production.local
+
+# ====================
+# Server (Express)
+# ====================
+server/node_modules/
+server/.env
+
+# ====================
+# Optional IDE folders
+# ====================
+.vscode/
+.idea/
+# Root environment file
+/.env
+
+# System files (repeated from global, but for safety)
+.DS_Store
+Thumbs.db
