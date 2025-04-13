@@ -3,7 +3,7 @@ import ConnectWallet from "./ConnectWallet";
 const Home = () => {
   return (
     <div>
-      <h1>Crypt PayMe</h1>
+      <h1>Welcome to Crypt PayMe</h1>
       <ConnectWallet />
     </div>
   );

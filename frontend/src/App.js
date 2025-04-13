@@ -1,11 +1,16 @@
 import React from "react";
 import { BlockchainProvider } from "./context/BlockchainContext";
-import Home from "./components/Home";
+import { Routes, Route } from "react-router-dom";
+import ConnectWallet from "./components/ConnectWallet";
+import MakePayment from "./components/MakePayment";
 
 const App = () => {
   return (
     <BlockchainProvider>
-      <Home />
+      <Routes>
+        <Route path="/" element={<ConnectWallet />} />
+        <Route path="/make-payment" element={<MakePayment />} />
+      </Routes>
     </BlockchainProvider>
   );
 };
