@@ -1,87 +1,126 @@
-import { useState } from "react";
+import React, { useState } from "react";
+import { BrowserProvider, Contract, parseEther } from "ethers";
 import axios from "axios";
-import { useNavigate } from "react-router-dom"; // Import navigation
+import { useNavigate } from "react-router-dom";
+import contractArtifact from "../abi/CryptPayMe.json"; // FIXED
+import { getEthPriceInInr } from "../utils/getEthPrice";
+
+const CONTRACT_ADDRESS = "0x549B48C233c115215F4dFfBD180853249E273498";
 
 const MakePayment = () => {
-  const [amount, setAmount] = useState("");
+  const [amountInr, setAmountInr] = useState("");
   const [senderName, setSenderName] = useState("");
   const [upiId, setUpiId] = useState("");
-  const [message, setMessage] = useState("");
-  const [paymentSuccess, setPaymentSuccess] = useState(false); // ✅ Add this
+  const [status, setStatus] = useState("");
+  const [paymentSuccess, setPaymentSuccess] = useState(false);
+  const [loading, setLoading] = useState(false);
 
-  const navigate = useNavigate(); // ✅ Initialize navigate
+  const navigate = useNavigate();
+  const contractABI = contractArtifact.abi; // ✅ FIXED
 
   const handlePayment = async () => {
-    const numericAmount = parseFloat(amount);
+    if (!amountInr || !senderName || !upiId) {
+      setStatus("❌ Please fill out all fields correctly.");
+      return;
+    }
 
-    if (!senderName || !upiId || isNaN(numericAmount) || numericAmount <= 0) {
-      setMessage("⚠️ Please fill out all fields with valid values.");
+    if (typeof window.ethereum === "undefined") {
+      setStatus("❌ MetaMask not found.");
       return;
     }
 
     try {
-      const response = await axios.post("http://localhost:5000/api/make-payment", {
-        amount: numericAmount,
-        senderName: senderName,
-        receiverUpiId: upiId,
+      setLoading(true);
+      setStatus("⏳ Connecting to MetaMask...");
+
+      await window.ethereum.request({ method: "eth_requestAccounts" });
+      const provider = new BrowserProvider(window.ethereum);
+      const signer = await provider.getSigner();
+      const contract = new Contract(CONTRACT_ADDRESS, contractABI, signer); // ✅ FIXED
+
+      const ethPriceInInr = await getEthPriceInInr();
+      if (!ethPriceInInr) {
+        setStatus("❌ Failed to fetch ETH price.");
+        setLoading(false);
+        return;
+      }
+
+      const ethAmount = (parseFloat(amountInr) / ethPriceInInr).toFixed(6);
+      const parsedEth = parseEther(ethAmount.toString());
+
+      const tx = await contract.sendPayment(senderName, upiId, parsedEth, {
+        value: parsedEth,
       });
 
-      setMessage(`✅ ${response.data.message}`);
-      setAmount("");
+      setStatus("📤 Transaction sent. Waiting for confirmation...");
+      await tx.wait();
+
+      await axios.post("http://localhost:5000/api/make-payment", {
+        amount: parseFloat(amountInr),
+        senderName,
+        receiverUpiId: upiId,
+        txHash: tx.hash,
+      });
+
+      setStatus(`✅ Payment successful! Tx Hash: ${tx.hash}`);
+      setAmountInr("");
       setSenderName("");
       setUpiId("");
-      setPaymentSuccess(true); // ✅ Show redirect button
+      setPaymentSuccess(true);
     } catch (error) {
-      console.error("Payment failed:", error);
-      setMessage(
-        `❌ ${error.response?.data?.message || "Something went wrong. Please try again."}`
-      );
-      setPaymentSuccess(false); // Hide redirect button if error
+      console.error("❌ Error in transaction or backend:", error);
+      setStatus("❌ Transaction failed or rejected. Check console for details.");
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div style={{ padding: "20px", maxWidth: "400px", margin: "0 auto" }}>
-      <h2>Make Payment</h2>
+    <div className="max-w-md mx-auto mt-10 p-6 border rounded-xl shadow-xl bg-white">
+      <h2 className="text-xl font-bold mb-4">Make a Payment</h2>
 
-      <div style={{ marginBottom: "10px" }}>
-        <label>Amount (INR): </label>
-        <input
-          type="number"
-          value={amount}
-          onChange={(e) => setAmount(e.target.value)}
-        />
-      </div>
+      <input
+        type="number"
+        placeholder="Amount in Rupees (₹)"
+        className="w-full p-2 mb-3 border rounded"
+        value={amountInr}
+        onChange={(e) => setAmountInr(e.target.value)}
+      />
 
-      <div style={{ marginBottom: "10px" }}>
-        <label>Sender's Name: </label>
-        <input
-          type="text"
-          value={senderName}
-          onChange={(e) => setSenderName(e.target.value)}
-        />
-      </div>
+      <input
+        type="text"
+        placeholder="Sender's Name"
+        className="w-full p-2 mb-3 border rounded"
+        value={senderName}
+        onChange={(e) => setSenderName(e.target.value)}
+      />
 
-      <div style={{ marginBottom: "10px" }}>
-        <label>Receiver's UPI ID: </label>
-        <input
-          type="text"
-          value={upiId}
-          onChange={(e) => setUpiId(e.target.value)}
-        />
-      </div>
+      <input
+        type="text"
+        placeholder="Receiver's UPI ID"
+        className="w-full p-2 mb-3 border rounded"
+        value={upiId}
+        onChange={(e) => setUpiId(e.target.value)}
+      />
 
-      <button onClick={handlePayment}>Submit Payment</button>
+      <button
+        onClick={handlePayment}
+        disabled={loading}
+        className={`w-full py-2 px-4 rounded text-white ${
+          loading ? "bg-gray-400 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700"
+        }`}
+      >
+        {loading ? "Processing..." : "Pay Now"}
+      </button>
 
-      {message && (
-        <p style={{ marginTop: "10px", fontWeight: "bold" }}>{message}</p>
+      {status && (
+        <p className="mt-4 text-sm font-semibold text-gray-700">{status}</p>
       )}
 
-      {/* ✅ Show button after successful payment */}
       {paymentSuccess && (
         <button
-          style={{ marginTop: "10px" }}
           onClick={() => navigate("/balances")}
+          className="mt-4 w-full bg-green-600 hover:bg-green-700 text-white py-2 px-4 rounded"
         >
           Go to Balance Display
         </button>
