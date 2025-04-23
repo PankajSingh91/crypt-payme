@@ -1,6 +1,7 @@
 import React, { useContext, useEffect, useState } from 'react';
-import { Wallet, Send, Download, Home, Shield, History, ChevronRight } from 'lucide-react';
+import { Wallet, Send, Download, Home, Shield, History, ChevronRight, ArrowUpRight } from 'lucide-react';
 import { Link } from 'react-router-dom';
+import axios from 'axios';
 import { BlockchainContext } from '../context/BlockchainContext';
 
 function Dashboard() {
@@ -10,11 +11,14 @@ function Dashboard() {
 
   useEffect(() => {
     if (currentAccount) {
-      setRecentTransactions([
-        { id: 1, type: 'send', amount: '0.5 ETH', to: '0x1234...5678', date: '2024-03-15', status: 'completed' },
-        { id: 2, type: 'receive', amount: '1 ETH', from: '0x8765...4321', date: '2024-03-14', status: 'completed' },
-        { id: 3, type: 'send', amount: '0.1 ETH', to: '0x9876...1234', date: '2024-03-13', status: 'failed' }
-      ]);
+      axios.get('http://localhost:5000/api/transactions')
+        .then((res) => {
+          const latestThree = res.data.slice(0, 3);
+          setRecentTransactions(latestThree);
+        })
+        .catch((err) => {
+          console.error('Failed to load recent transactions:', err);
+        });
     }
   }, [currentAccount]);
 
@@ -86,7 +90,7 @@ function Dashboard() {
                   <Send className="w-8 h-8 text-[#00D4FF] mr-4" />
                   <div>
                     <h3 className="text-xl font-bold">Make Payment</h3>
-                    <p className="text-gray-400">Transfer crypto to another wallet</p>
+                    <p className="text-gray-400">Pay crypto to UPI id in INR</p>
                   </div>
                   <ChevronRight className="ml-auto" />
                 </Link>
@@ -118,29 +122,27 @@ function Dashboard() {
                   <History className="w-6 h-6 text-[#00D4FF]" />
                 </div>
                 <div className="space-y-4">
-                  {recentTransactions.map((tx) => (
-                    <div key={tx.id} className="bg-black/30 rounded-xl p-4 flex items-center justify-between">
+                  {recentTransactions.map((tx, idx) => (
+                    <div key={idx} className="bg-black/30 rounded-xl p-4 flex items-center justify-between">
                       <div className="flex items-center">
-                        {tx.type === 'send' ? (
-                          <Send className="w-6 h-6 text-[#00D4FF] mr-4" />
-                        ) : (
-                          <Download className="w-6 h-6 text-[#00FF85] mr-4" />
-                        )}
+                        <ArrowUpRight className="w-6 h-6 text-[#00D4FF] mr-4" />
                         <div>
-                          <div className="font-bold">{tx.amount}</div>
+                          <div className="font-bold">₹{parseFloat(tx.amount).toFixed(2)}</div>
                           <div className="text-sm text-gray-400">
-                            {tx.type === 'send' ? `To: ${tx.to}` : `From: ${tx.from}`}
+                            To: {tx.receiverUpiId}
                           </div>
                         </div>
                       </div>
                       <div className="text-right">
                         <div className={`text-sm ${
-                          tx.status === 'completed' ? 'text-[#00FF85]' :
-                          tx.status === 'pending' ? 'text-yellow-500' : 'text-red-500'
+                          tx.paymentStatus === 'success' ? 'text-[#00FF85]' :
+                          tx.paymentStatus === 'pending' ? 'text-yellow-500' : 'text-red-500'
                         }`}>
-                          {tx.status}
+                          {tx.paymentStatus}
                         </div>
-                        <div className="text-sm text-gray-400">{tx.date}</div>
+                        <div className="text-sm text-gray-400">
+                          {new Date(tx.timestamp).toLocaleDateString()}
+                        </div>
                       </div>
                     </div>
                   ))}

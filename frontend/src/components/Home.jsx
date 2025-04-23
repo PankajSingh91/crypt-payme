@@ -1,9 +1,52 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Shield, Wallet, RefreshCw, ArrowRight, ChevronDown, Lock, Zap, RefreshCcw } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 function Home() {
   const navigate = useNavigate();
+  const [cryptoRates, setCryptoRates] = useState([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    const fetchRates = async () => {
+      try {
+        const res = await fetch(
+          'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,solana,tether&vs_currencies=inr&include_24hr_change=true'
+        );
+        const data = await res.json();
+        const formatted = [
+          {
+            name: 'Bitcoin',
+            price: `₹${data.bitcoin.inr.toLocaleString()}`,
+            change: `${data.bitcoin.inr_24h_change.toFixed(2)}%`,
+          },
+          {
+            name: 'Ethereum',
+            price: `₹${data.ethereum.inr.toLocaleString()}`,
+            change: `${data.ethereum.inr_24h_change.toFixed(2)}%`,
+          },
+          {
+            name: 'Solana',
+            price: `₹${data.solana.inr.toLocaleString()}`,
+            change: `${data.solana.inr_24h_change.toFixed(2)}%`,
+          },
+          {
+            name: 'USDT',
+            price: `₹${data.tether.inr.toLocaleString()}`,
+            change: `${data.tether.inr_24h_change.toFixed(2)}%`,
+          }
+        ];
+        setCryptoRates(formatted);
+        setLoading(false);
+      } catch (err) {
+        console.error('Failed to fetch crypto rates:', err);
+      }
+    };
+
+    fetchRates();
+    const interval = setInterval(fetchRates, 30000); // refresh every 30s
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <div className="min-h-screen bg-[#121212] text-white font-['Space_Grotesk']">
@@ -53,23 +96,21 @@ function Home() {
         <div className="container mx-auto">
           <h2 className="text-4xl font-bold text-center mb-16">Why Choose CryptPayMe?</h2>
           <div className="grid md:grid-cols-3 gap-8">
-            {[
-              {
-                icon: <Shield className="w-12 h-12 text-[#00D4FF]" />,
-                title: "End-to-End Encryption",
-                description: "Your transactions are protected with military-grade encryption"
-              },
-              {
-                icon: <Lock className="w-12 h-12 text-[#00FF85]" />,
-                title: "No Unauthorized Deductions",
-                description: "Complete control over your funds with secure smart contracts"
-              },
-              {
-                icon: <RefreshCw className="w-12 h-12 text-[#00D4FF]" />,
-                title: "Instant Refunds",
-                description: "Automated refund mechanism for peace of mind"
-              }
-            ].map((feature, index) => (
+            {[{
+              icon: <Shield className="w-12 h-12 text-[#00D4FF]" />,
+              title: "End-to-End Encryption",
+              description: "Your transactions are protected with military-grade encryption"
+            },
+            {
+              icon: <Lock className="w-12 h-12 text-[#00FF85]" />,
+              title: "No Unauthorized Deductions",
+              description: "Complete control over your funds with secure smart contracts"
+            },
+            {
+              icon: <RefreshCw className="w-12 h-12 text-[#00D4FF]" />,
+              title: "Instant Refunds",
+              description: "Automated refund mechanism for peace of mind"
+            }].map((feature, index) => (
               <div key={index} className="backdrop-blur-lg bg-white/5 rounded-2xl p-8 hover:bg-white/10 transition-colors">
                 {feature.icon}
                 <h3 className="text-xl font-bold mt-4 mb-2">{feature.title}</h3>
@@ -83,23 +124,24 @@ function Home() {
       {/* Live Rates Section */}
       <section id="rates" className="py-20 px-6">
         <div className="container mx-auto">
-          <h2 className="text-4xl font-bold text-center mb-16">Live Crypto Rates</h2>
+          <h2 className="text-4xl font-bold text-center mb-16">Live Crypto Rates (INR)</h2>
           <div className="grid md:grid-cols-4 gap-6">
-            {[
-              { name: "Bitcoin", price: "$45,232.41", change: "+2.5%" },
-              { name: "Ethereum", price: "$3,124.52", change: "+1.8%" },
-              { name: "Solana", price: "$98.45", change: "+4.2%" },
-              { name: "USDT", price: "$1.00", change: "0.0%" }
-            ].map((crypto, index) => (
-              <div key={index} className="backdrop-blur-lg bg-white/5 rounded-xl p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="font-bold">{crypto.name}</h3>
-                  <RefreshCcw className="w-4 h-4 text-[#00D4FF]" />
+            {loading ? (
+              <div className="col-span-full text-center text-gray-400">Loading rates...</div>
+            ) : (
+              cryptoRates.map((crypto, index) => (
+                <div key={index} className="backdrop-blur-lg bg-white/5 rounded-xl p-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <h3 className="font-bold">{crypto.name}</h3>
+                    <RefreshCcw className="w-4 h-4 text-[#00D4FF]" />
+                  </div>
+                  <div className="text-2xl font-bold mb-2">{crypto.price}</div>
+                  <div className={`font-medium ${parseFloat(crypto.change) >= 0 ? 'text-[#00FF85]' : 'text-red-500'}`}>
+                    {crypto.change}
+                  </div>
                 </div>
-                <div className="text-2xl font-bold mb-2">{crypto.price}</div>
-                <div className="text-[#00FF85]">{crypto.change}</div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
       </section>

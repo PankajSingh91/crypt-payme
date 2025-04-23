@@ -51,7 +51,7 @@ const BalanceDisplay = () => {
       {/* Main Content */}
       <div className="pt-24 px-6">
         <div className="container mx-auto">
-          <Link to="/" className="flex items-center text-gray-400 hover:text-white mb-8 transition-colors">
+          <Link to="/dashboard" className="flex items-center text-gray-400 hover:text-white mb-8 transition-colors">
             <ArrowLeft className="w-5 h-5 mr-2" />
             Back to Dashboard
           </Link>
