@@ -5,6 +5,8 @@ import Home from "./components/Home"; // ✅ Use your updated Home component
 import MakePayment from "./components/MakePayment";
 import TransactionLogs from "./components/TransactionLogs";
 import BalanceDisplay from "./components/BalanceDisplay";
+import Dashboard from "./components/Dashboard";
+import Security from './components/Security';
 
 const App = () => {
   return (
@@ -14,6 +16,8 @@ const App = () => {
         <Route path="/make-payment" element={<MakePayment />} />
         <Route path="/transactions" element={<TransactionLogs />} />
         <Route path="/balances" element={<BalanceDisplay />} />
+        <Route path="/dashboard" element={<Dashboard />} />
+        <Route path="/security" element={<Security />} />
       </Routes>
     </BlockchainProvider>
   );
