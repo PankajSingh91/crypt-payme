@@ -1,7 +1,6 @@
 const express = require('express');
 const router = express.Router();
 const { razorpay_key_id, razorpay_key_secret } = require('../config');
-const Balance = require('../models/UpiBalance');
 const Transaction = require('../models/Transaction');
 const { makePayment: razorpayPayout } = require('../controllers/paymentController');
 
@@ -28,7 +27,7 @@ router.post('/make-payment', async (req, res) => {
       return res.status(400).json({ success: false, message: "Invalid input data" });
     }
 
-    // ✅ CALL Razorpay payout function from controller
+    // ✅ Call Razorpay payout function from controller (handles balance update and payout)
     await razorpayPayout({
       body: {
         amountInRupees: numericAmount,
@@ -36,27 +35,11 @@ router.post('/make-payment', async (req, res) => {
         receiverUpiId
       }
     }, {
-      json: () => {}, // dummy res to prevent controller from sending response
+      json: () => {}, // dummy response to satisfy the controller
       status: () => ({ json: () => {} })
     });
 
-    // ✅ Update or Create Balance
-    const existingBalance = await Balance.findOne({ upiId: receiverUpiId });
-
-    if (existingBalance) {
-      existingBalance.balance += numericAmount;
-      await existingBalance.save();
-      console.log(`✅ Updated existing balance for ${receiverUpiId}`);
-    } else {
-      const newBalance = new Balance({
-        upiId: receiverUpiId,
-        balance: numericAmount
-      });
-      await newBalance.save();
-      console.log(`✅ Created new balance entry for ${receiverUpiId}`);
-    }
-
-    // ✅ Log the Transaction
+    // ✅ Log the blockchain-side transaction (txHash)
     const newTransaction = new Transaction({
       senderName,
       receiverUpiId,
