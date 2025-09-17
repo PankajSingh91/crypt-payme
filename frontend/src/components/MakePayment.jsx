@@ -59,6 +59,7 @@ const MakePayment = () => {
       await tx.wait();
 
       await axios.post("http://localhost:5000/api/make-payment", {
+        senderWallet: await signer.getAddress(), // ✅ FIXED: include senderWallet
         amount: parseFloat(amountInr),
         senderName,
         receiverUpiId: upiId,
