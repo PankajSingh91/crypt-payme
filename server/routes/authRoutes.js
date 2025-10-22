@@ -46,13 +46,13 @@ router.post('/verify-otp', async (req, res) => {
       return res.status(400).json({ error: 'email, otp and walletAddress are required' });
     }
 
-    // 1) Verify OTP with microservice
+    // 1️⃣ Verify OTP with microservice
     const data = await verifyOtp({ email, otp, deviceId, userAgent });
     const authToken = data.authToken;
     const refreshToken = data.refreshToken;
     let remoteUser = data.user || {};
 
-    // 2) Link the wallet on 2FA microservice (idempotent)
+    // 2️⃣ Link the wallet on 2FA microservice (idempotent)
     try {
       const addResp = await addWalletToUser({
         email: remoteUser.email || email,
@@ -62,12 +62,14 @@ router.post('/verify-otp', async (req, res) => {
       });
       remoteUser = addResp.user || addResp || remoteUser;
     } catch (e) {
-      console.error('wallet linking after verify-otp failed', e?.response?.data || e?.message || e);
-      // If linking fails, it's reasonable to fail verification because you require wallet mapping.
+      console.error(
+        'wallet linking after verify-otp failed',
+        e?.response?.data || e?.message || e
+      );
       return res.status(500).json({ error: 'failed to link wallet after OTP verification' });
     }
 
-    // 3) Persist local User record (walletAddress required by schema)
+    // 3️⃣ Persist local User record (walletAddress required by schema)
     let dbUser = await User.findOne({ email });
     if (!dbUser) {
       dbUser = new User({
@@ -83,7 +85,7 @@ router.post('/verify-otp', async (req, res) => {
     }
     await dbUser.save();
 
-    // 4) Set auth cookies
+    // 4️⃣ Set auth cookies
     if (authToken) {
       res.cookie(COOKIE_NAME, authToken, {
         httpOnly: true,
@@ -92,6 +94,7 @@ router.post('/verify-otp', async (req, res) => {
         maxAge: parseInt(process.env.AUTH_COOKIE_MAXAGE || String(15 * 60 * 1000), 10)
       });
     }
+
     if (refreshToken) {
       res.cookie(`${COOKIE_NAME}_rt`, refreshToken, {
         httpOnly: true,
@@ -101,10 +104,15 @@ router.post('/verify-otp', async (req, res) => {
       });
     }
 
-    return res.json({ ok: true, user: dbUser });
+    // ✅ 5️⃣ Return token for frontend to store in localStorage
+    return res.json({
+      ok: true,
+      user: dbUser,
+      token: authToken || null,
+      refreshToken: refreshToken || null
+    });
   } catch (err) {
     console.error('verify-otp err', err?.response?.data || err?.info || err?.message || err);
-    // If microservice returned {error:'no otp requested or otp expired'} propagate that
     if (err?.response?.data) return res.status(400).json(err.response.data);
     return res.status(400).json({ error: 'invalid or expired otp' });
   }
@@ -118,6 +126,7 @@ router.get('/whoami', async (req, res) => {
     const token = req.cookies[COOKIE_NAME] || req.headers.authorization?.split(' ')[1];
     const deviceId = req.headers['x-device-id'];
     if (!token) return res.status(401).json({ error: 'no auth' });
+
     const profile = await whoami({ token, deviceId });
     return res.json(profile);
   } catch (err) {
@@ -134,6 +143,7 @@ router.post('/logout', async (req, res) => {
     const token = req.cookies[COOKIE_NAME] || req.headers.authorization?.split(' ')[1];
     const deviceId = req.headers['x-device-id'];
     if (token) await logout({ token, deviceId });
+
     res.clearCookie(COOKIE_NAME);
     res.clearCookie(`${COOKIE_NAME}_rt`);
     return res.json({ ok: true });
