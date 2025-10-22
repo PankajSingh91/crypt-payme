@@ -4,95 +4,11 @@ import { Wallet, Send, Download, Home, Shield, History, ChevronRight, ArrowUpRig
 import { Link, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import { BlockchainContext } from '../context/BlockchainContext';
+import OTPModal from "../components/OTPModal";
 
 // Ensure axios will send cookies (HttpOnly cookie set by server)
 axios.defaults.withCredentials = true;
 const API_BASE = process.env.REACT_APP_API_BASE || 'http://localhost:5000';
-
-function OTPModal({ visible, email, deviceId, onClose, onVerified, wallet }) {
-  const [otp, setOtp] = useState('');
-  const [cooldown, setCooldown] = useState(0);
-  const [sending, setSending] = useState(false);
-
-  useEffect(() => {
-    let t;
-    if (cooldown > 0) {
-      t = setTimeout(() => setCooldown(cooldown - 1), 1000);
-    }
-    return () => clearTimeout(t);
-  }, [cooldown]);
-
-  async function sendOtp() {
-    try {
-      setSending(true);
-      await axios.post(`${API_BASE}/auth/request-otp`, { email }, {
-        headers: { 'x-device-id': deviceId }
-      });
-      setCooldown(60);
-      alert(`OTP sent to ${email}. Check your inbox (or test SMTP logs).`);
-    } catch (err) {
-      console.error('request-otp error', err?.response?.data || err?.message);
-      alert('Failed to send OTP. Try again.');
-    } finally {
-      setSending(false);
-    }
-  }
-
-  async function verifyOtp() {
-    if (!otp || otp.trim().length === 0) return alert('Enter OTP');
-    if (!wallet) return alert('No wallet connected. Please connect your wallet.');
-    try {
-      const resp = await axios.post(`${API_BASE}/auth/verify-otp`, { email, otp, walletAddress: wallet.toLowerCase() }, {
-        headers: { 'x-device-id': deviceId }
-      });
-      // server sets cookie; returns user profile
-      const profile = resp.data.user || resp.data;
-      onVerified && onVerified(profile);
-    } catch (err) {
-      console.error('verify-otp error', err?.response?.data || err?.message);
-      alert('Invalid or expired OTP. Try resend.');
-    }
-  }
-
-  if (!visible) return null;
-  return (
-    <div style={{
-      position: 'fixed', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
-      background: 'rgba(0,0,0,0.4)', zIndex: 2000
-    }}>
-      <div style={{ background: '#0b0b0b', color: '#fff', padding: 20, borderRadius: 12, width: 420 }}>
-        <h3 className="text-xl font-bold mb-2">OTP verification</h3>
-        <p className="text-sm text-gray-300 mb-4">Verifying email: <b>{email}</b></p>
-
-        <div className="mb-4">
-          <button
-            className="bg-[#00D4FF] text-black px-4 py-2 rounded mr-3"
-            onClick={sendOtp}
-            disabled={sending || cooldown > 0}
-          >
-            {sending ? 'Sending...' : (cooldown > 0 ? `Resend in ${cooldown}s` : 'Send / Resend OTP')}
-          </button>
-        </div>
-
-        <div className="flex gap-2 mb-4">
-          <input
-            value={otp}
-            onChange={(e) => setOtp(e.target.value)}
-            placeholder="Enter OTP"
-            className="flex-1 p-2 rounded bg-[#111]"
-            style={{ color: '#fff' }}
-          />
-          <button className="bg-[#00FF85] text-black px-4 py-2 rounded" onClick={verifyOtp}>Verify</button>
-        </div>
-
-        <div className="flex items-center justify-between">
-          <small className="text-gray-400">Didn't get it? Check spam or logs (test SMTP).</small>
-          <button className="text-sm text-gray-300" onClick={onClose}>Cancel</button>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 function Dashboard() {
   const { currentAccount, balance, connectWallet } = useContext(BlockchainContext);
@@ -138,14 +54,27 @@ function Dashboard() {
     }
   };
 
-  // Check current authentication with backend (2FA)
+  // Check current authentication with backend (2FA) - UPDATED with better headers and logging
   async function checkAuth() {
     try {
-      const resp = await axios.get(`${API_BASE}/auth/whoami`, {
-        headers: { 'x-device-id': deviceId }
-      });
+      const token = localStorage.getItem('cp_auth_token');
+      const headers = {
+        'x-device-id': deviceId,
+      };
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      const config = {
+        headers,
+        withCredentials: true  // ✅ Ensure cookies are sent as fallback
+      };
+      console.log('checkAuth headers:', headers);  // ✅ Debug: Check in console
+
+      const resp = await axios.get(`${API_BASE}/auth/whoami`, config);
+
       return resp.data.user || resp.data;
     } catch (err) {
+      console.error('checkAuth failed:', err?.response?.status, err?.response?.data || err.message);
       return null;
     }
   }
@@ -184,7 +113,10 @@ function Dashboard() {
 
     // request OTP via CryptPayMe backend (which proxies to your 2FA microservice)
     try {
-      await axios.post(`${API_BASE}/auth/request-otp`, { email: emailToUse }, { headers: { 'x-device-id': deviceId }});
+      await axios.post(`${API_BASE}/auth/request-otp`, { email: emailToUse }, { 
+        headers: { 'x-device-id': deviceId },
+        withCredentials: true  // ✅ Add for consistency (cookies if any)
+      });
       setOtpVisible(true);
     } catch (err) {
       console.error('request-otp failed', err?.response?.data || err?.message);
@@ -192,12 +124,19 @@ function Dashboard() {
     }
   };
 
-  // Called when OTP verified successfully (server returns profile). Link wallet then navigate.
+  // Called when OTP verified successfully (server returns profile). Link wallet then navigate. - UPDATED with auth headers
   const onOtpVerified = async (profile) => {
     setOtpVisible(false);
     // Attempt to add wallet (backend will proxy to 2FA wallets/add)
     try {
-      await axios.post(`${API_BASE}/wallets/add`, { wallet: currentAccount }, { headers: { 'x-device-id': deviceId }});
+      const token = localStorage.getItem('cp_auth_token');  // ✅ Get the fresh token set by OTPModal
+      await axios.post(`${API_BASE}/wallets/add`, { wallet: currentAccount }, { 
+        headers: { 
+          'x-device-id': deviceId,
+          'Authorization': token ? `Bearer ${token}` : undefined  // ✅ ADD THIS: Send token as header (fallback to cookie)
+        },
+        withCredentials: true  // ✅ ADD THIS: Ensure cookies are sent as fallback
+      });
       // On success, navigate to make-payment
       navigate('/make-payment');
     } catch (err) {
@@ -216,7 +155,15 @@ function Dashboard() {
   // Logout (clear cookie via backend)
   const handleLogout = async () => {
     try {
-      await axios.post(`${API_BASE}/auth/logout`, {}, { headers: { 'x-device-id': deviceId }});
+      const token = localStorage.getItem('cp_auth_token');
+      await axios.post(`${API_BASE}/auth/logout`, {}, { 
+        headers: { 
+          'x-device-id': deviceId,
+          'Authorization': token ? `Bearer ${token}` : undefined 
+        },
+        withCredentials: true 
+      });
+      localStorage.removeItem('cp_auth_token');  // ✅ Clear local token on logout
       alert('Logged out.');
     } catch (err) {
       console.error('logout error', err);
